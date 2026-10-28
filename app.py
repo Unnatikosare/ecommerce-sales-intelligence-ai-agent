@@ -1,10 +1,8 @@
 
-import os
 import streamlit as st
-import mysql.connector
+import pandas as pd
 from groq import Groq
 
-# ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="E-commerce Sales AI Agent",
     page_icon="🛍️",
@@ -14,209 +12,117 @@ st.set_page_config(
 st.title("🛍️ E-commerce Sales Intelligence AI Agent")
 st.caption("Ask questions about sales, profit, regions, and products.")
 
-# ---------------- SIDEBAR SETTINGS ----------------
+@st.cache_data
+def load_data():
+    df = pd.read_csv("ecommerce_sales_ai_agent_dataset.csv")
+    df.columns = df.columns.str.strip()
+    df["Sales"] = pd.to_numeric(df["Sales"], errors="coerce")
+    df["Profit"] = pd.to_numeric(df["Profit"], errors="coerce")
+    return df
 
-# Load credentials from .streamlit/secrets.toml
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"Could not load the dataset: {e}")
+    st.stop()
 
-groq_api_key = st.secrets["GROQ_API_KEY"]
+st.success(f"Dataset loaded: {len(df):,} rows")
 
-mysql_config = {
-    "host": st.secrets["MYSQL_HOST"],
-    "user": st.secrets["MYSQL_USER"],
-    "password": st.secrets["MYSQL_PASSWORD"],
-    "database": st.secrets["MYSQL_DATABASE"],
-}
-
-
-
-# ---------------- SQL QUERY ROUTER ----------------
-def get_sql_query(question):
-    if not isinstance(question, str) or not question.strip():
-        return None
-
-    q = question.strip().lower()
-
-    if any(word in q for word in [
-        "overall", "summary", "total", "margin"
-    ]) and any(word in q for word in [
-        "sales", "profit", "business", "margin", "summary"
-    ]):
-        return """
-        SELECT
-            ROUND(SUM(Sales), 2) AS Total_Sales,
-            ROUND(SUM(Profit), 2) AS Total_Profit,
-            ROUND(
-                SUM(Profit) / NULLIF(SUM(Sales), 0) * 100, 2
-            ) AS Profit_Margin_Percent
-        FROM ecommerce_sales_ai_agent_dataset;
-        """
-
-    if any(word in q for word in [
-        "region", "regional"
-    ]) and any(word in q for word in [
-        "sales", "revenue"
-    ]):
-        return """
-        SELECT Region,
-               ROUND(SUM(Sales), 2) AS Total_Sales
-        FROM ecommerce_sales_ai_agent_dataset
-        GROUP BY Region
-        ORDER BY Total_Sales DESC;
-        """
-
-    if any(word in q for word in [
-        "category", "categories"
-    ]) and any(word in q for word in [
-        "profit", "profitable"
-    ]):
-        return """
-        SELECT Category,
-               ROUND(SUM(Profit), 2) AS Total_Profit
-        FROM ecommerce_sales_ai_agent_dataset
-        GROUP BY Category
-        ORDER BY Total_Profit DESC;
-        """
-
-    if any(word in q for word in [
-        "product", "products", "best-selling"
-    ]) and any(word in q for word in [
-        "top", "best", "highest", "sales", "selling"
-    ]):
-        return """
-        SELECT Product,
-               ROUND(SUM(Sales), 2) AS Total_Sales
-        FROM ecommerce_sales_ai_agent_dataset
-        GROUP BY Product
-        ORDER BY Total_Sales DESC
-        LIMIT 10;
-        """
-
-    return None
-
-
-# ---------------- DATABASE + AI ----------------
 def answer_question(question):
-    query = get_sql_query(question)
+    q = question.lower()
 
-    if query is None:
-        return (
-            "I don't support that question yet. Try asking about "
-            "overall business summary, regional sales, category profit, "
-            "or top products by sales."
+    if any(word in q for word in ["summary", "overall", "total business"]):
+        result = {
+            "Total Sales": round(df["Sales"].sum(), 2),
+            "Total Profit": round(df["Profit"].sum(), 2),
+            "Total Orders": int(df["Order_ID"].nunique()),
+            "Profit Margin (%)": round(
+                df["Profit"].sum() / df["Sales"].sum() * 100, 2
+            ) if df["Sales"].sum() else 0
+        }
+
+    elif "region" in q and any(word in q for word in ["sales", "revenue", "highest"]):
+        result = (
+            df.groupby("Region", dropna=False)["Sales"]
+            .sum().sort_values(ascending=False).round(2).to_dict()
         )
 
-    conn = None
-
-    try:
-        conn = mysql.connector.connect(**mysql_config)
-        query_check = query.strip().lower()
-
-        if not query_check.startswith("select"):
-            return "Only read-only SELECT queries are allowed."
-
-        if any(word in query_check for word in [
-        "insert ", "update ", "delete ", "drop ",
-        "alter ", "truncate ", "create ", "grant ", "revoke "
-         ]):
-            return "This query is not allowed."
-
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(query)
-        rows = cursor.fetchall()
-
-        if not rows:
-            return "No results found."
-
-        data = str(rows)
-
-        client = Groq(api_key=groq_api_key)
-
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an e-commerce data analyst. "
-                        "Answer using only the SQL results supplied. "
-                        "Report all monetary values in Indian rupees (₹). "
-                        "Do not invent facts or make unsupported claims. "
-                        "Give a concise answer with key figures."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Business question: {question}\n\n"
-                        f"SQL results: {data}"
-                    )
-                }
-            ],
-            temperature=0.2
+    elif "category" in q and "profit" in q:
+        result = (
+            df.groupby("Category", dropna=False)["Profit"]
+            .sum().sort_values(ascending=False).round(2).to_dict()
         )
 
-        return response.choices[0].message.content
-
-    except Exception as e:
-        return (
-            f"Could not answer the question. "
-            f"Please check your API key and database connection. "
-            f"Technical details: {e}"
+    elif "product" in q and any(word in q for word in ["top", "best", "sales", "selling"]):
+        result = (
+            df.groupby("Product", dropna=False)["Sales"]
+            .sum().sort_values(ascending=False).head(10).round(2).to_dict()
         )
 
-    finally:
-        if conn is not None and conn.is_connected():
-            conn.close()
+    else:
+        return "Try asking about overall business summary, regional sales, category profit, or top products by sales."
 
+    st.dataframe(
+        pd.DataFrame(list(result.items()), columns=["Metric", "Value"]),
+        use_container_width=True,
+        hide_index=True
+    )
 
-# ---------------- CHAT INTERFACE ----------------
+    api_key = st.secrets.get("GROQ_API_KEY", "")
+    if not api_key:
+        return f"Here are the results from your dataset:\n\n{result}"
+
+    client = Groq(api_key=api_key)
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-20b",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are an e-commerce data analyst. "
+                    "Answer only from the supplied results. "
+                    "Use Indian rupees (₹) for monetary values. "
+                    "Be concise and do not invent facts."
+                )
+            },
+            {
+                "role": "user",
+                "content": f"Question: {question}\nResults: {result}"
+            }
+        ],
+        temperature=0.2
+    )
+    return response.choices[0].message.content
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display conversation history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Suggested questions
 st.markdown("### Try asking")
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("- Which region has the highest sales?")
-    st.markdown("- Which category has the highest profit?")
-
-with col2:
-    st.markdown("- Show the top 10 products by sales.")
-    st.markdown("- Give me an overall business summary.")
-
+st.markdown(
+    "- Which region has the highest sales?\n"
+    "- Which category has the highest profit?\n"
+    "- Show the top 10 products by sales.\n"
+    "- Give me an overall business summary."
+)
 
 question = st.chat_input("Ask a question about your sales data...")
 
 if question:
-    st.session_state.messages.append(
-        {"role": "user", "content": question}
-    )
-
+    st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.markdown(question)
 
     with st.chat_message("assistant"):
-        if not groq_api_key:
-            st.error("Groq API key is missing. Check .streamlit/secrets.toml.")
-        else:
-            with st.spinner("Analyzing your sales data..."):
-                try:
-                    answer = answer_question(question)
-                    if answer is None:
-                        answer = (
-                            "I couldn't process that question. Try asking about "
-                            "regional sales, category profit, top products, "
-                            "or the overall business summary."
-                        )
-                    st.markdown(str(answer))
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": str(answer)}
-                    )
-                except Exception as e:
-                    st.error(f"Something went wrong: {e}")
+        with st.spinner("Analyzing your sales data..."):
+            try:
+                answer = answer_question(question)
+                st.markdown(answer)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": answer}
+                )
+            except Exception as e:
+                st.error(f"Something went wrong: {e}")
