@@ -1,51 +1,64 @@
-# E-commerce Sales Intelligence AI Agent
+# 🛍️ E-commerce Sales Intelligence AI Agent
 
-An AI-powered sales analytics application that helps users explore e-commerce performance through natural-language questions.
+A data analytics project that helps users explore e-commerce sales, profit, regional performance, and top-selling products through an interactive Streamlit chat interface.
 
-## Features
-- Interactive Streamlit chat interface
-- Sales and profit analysis by region and category
-- Top 10 products by sales
-- Overall business summary
-- Groq API integration for AI-generated insights
-- MySQL database integration for analytics queries
+## 🚀 Live Demo
 
-## Tech Stack
+[**Open the Live App**](https://ecommerce-sales-intelligence-ai-agent-dm6aatfhahzhoqtbbb7jw2.streamlit.app/)
+
+## ✨ Features
+
+- Analyze overall sales, profit, and profit margin.
+- Compare sales performance across regions.
+- Identify the most profitable product categories.
+- View the top 10 products by sales.
+- Ask business questions through an interactive chat interface.
+- Calculate results directly from a CSV dataset.
+- Optional Groq API integration for AI-generated summaries.
+
+## 🧰 Tech Stack
+
 - Python
 - Pandas
-- MySQL
-- Groq API
 - Streamlit
+- Groq API (optional)
+- Git and GitHub
 
-## Setup
+## 📊 Key Business Metrics
 
-1. Clone or download this repository.
+The current dataset analysis reports:
+
+- **Total Sales:** ₹4,30,05,656.85
+- **Total Profit:** ₹78,72,564.20
+- **Total Orders:** 2,500
+- **Profit Margin:** 18.31%
+
+These figures are calculated from the dataset used by the deployed demo.
+
+## 💬 Example Questions
+
+- Which region has the highest sales?
+- Which category has the highest profit?
+- Show the top 10 products by sales.
+- Give me an overall business summary.
+
+## ▶️ Run Locally
+
+1. Clone this repository.
 2. Install dependencies:
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+   `pip install -r requirements.txt`
 
-3. Create `.streamlit/secrets.toml` locally with your own credentials:
+3. Run the app:
 
-   ```toml
-   GROQ_API_KEY = "your-groq-api-key"
-   MYSQL_HOST = "localhost"
-   MYSQL_USER = "your-mysql-user"
-   MYSQL_PASSWORD = "your-mysql-password"
-   MYSQL_DATABASE = "ecommerce_ai"
-   ```
+   `streamlit run app.py`
 
-4. Make sure your MySQL database and `ecommerce_sales_ai_agent_dataset` table are set up.
-5. Start the app:
+## 🔐 Configuration
 
-   ```bash
-   streamlit run app.py
-   ```
+The CSV-based demo can calculate results without a MySQL connection. To enable Groq-generated summaries, configure `GROQ_API_KEY` in Streamlit Secrets. Never commit API keys or passwords to GitHub.
 
-## Security
-- Never commit API keys, passwords, or `.streamlit/secrets.toml`.
-- Use a dedicated read-only database user when deploying.
+## 👩‍💻 Author
 
-## Project Status
-Local prototype tested with sample sales, category-profit, top-product, and business-summary questions.
+**Unnati Kosare**
+
+[GitHub Profile](https://github.com/Unnatikosare)
