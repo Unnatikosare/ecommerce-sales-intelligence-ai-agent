@@ -62,11 +62,12 @@ def answer_question(question):
     else:
         return "Try asking about overall business summary, regional sales, category profit, or top products by sales."
 
-    st.dataframe(
-        pd.DataFrame(list(result.items()), columns=["Metric", "Value"]),
-        use_container_width=True,
-        hide_index=True
+    if isinstance(result, dict):
+        result_df = pd.DataFrame(
+        list(result.items()),
+        columns=["Metric", "Value"]
     )
+    st.dataframe(result_df, use_container_width=True, hide_index=True)
 
     api_key = st.secrets.get("GROQ_API_KEY", "")
     if not api_key:
